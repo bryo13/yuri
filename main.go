@@ -108,6 +108,7 @@ func sendEmail(body []byte) {
 }
 
 func main() {
+	// if there is no internet, run the code again after 1 minute
 	ticker := time.NewTicker(1 * time.Minute)
 	done := make(chan bool)
 
