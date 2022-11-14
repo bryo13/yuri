@@ -76,10 +76,10 @@ func loadDevotionalEmail() ([]byte, error) {
 	var devotional []string
 	daysFromStart := countDays()
 	subject := fmt.Sprintf("Subject: Day %d of devotional\r\n", daysFromStart)
+	devotional = append(devotional, "To:brian_tum@outlook.com\r\n"+subject)
 	// Find the review items
 	doc.Find("p").Each(func(i int, s *goquery.Selection) {
 		// For each item found, get the title
-		devotional = append(devotional, "To:brian_tum@outlook.com\r\n"+subject)
 		devotional = append(devotional, s.Text())
 	})
 
@@ -110,7 +110,6 @@ func sendEmail(body []byte) {
 func main() {
 	// if there is no internet, run the code again after 1 minute
 	ticker := time.NewTicker(1 * time.Minute)
-	done := make(chan bool)
 
 	body, _ := loadDevotionalEmail()
 	response := make(chan Response)
@@ -118,18 +117,13 @@ func main() {
 	go checkNet(response)
 	net_ok := <-response
 
-	go func() {
-		for {
-			select {
-			case <-done:
-				return
-			case <-ticker.C:
-				if net_ok.Err == nil {
-					sendEmail(body)
-					done <- true
-					ticker.Stop()
-				}
-			}
+	for range ticker.C {
+		if net_ok.Err == nil {
+			sendEmail(body)
+			ticker.Stop()
+			break
 		}
-	}()
+	}
+
+	os.Exit(0)
 }
