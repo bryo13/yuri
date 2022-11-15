@@ -53,7 +53,7 @@ func countDays() int {
 
 // loadDevotional scraps daily devotional text and packages the message as an email
 func loadDevotionalEmail() ([]byte, error) {
-	dev, err := http.Get(os.Get("WEB"))
+	dev, err := http.Get(os.Getenv("WEB"))
 	if err != nil {
 		return []byte("couldnt scrap web page"), errors.New("couldnt scrap webpage")
 	}
