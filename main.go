@@ -14,6 +14,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/joho/godotenv"
+	"github.com/mitchellh/go-homedir"
 )
 
 type Response struct {
@@ -40,24 +41,19 @@ func checkNet(r chan Response) {
 // countDays counts the number of days from day one to today
 func countDays() int {
 	date := time.Now()
-	fmt.Println(date)
 
 	format := "2006-01-02 15:04:05"
-	then, _ := time.Parse(format, "2022-11-13 08:58:06")
-	fmt.Println(then)
+	then, _ := time.Parse(format, "2022-11-13 07:58:06")
 
 	diff := date.Sub(then)
 
-	//func Since(t Time) Duration
-	//Since returns the time elapsed since t.
-	//It is shorthand for time.Now().Sub(t).
-
+	fmt.Println(int(diff.Hours() / 24))
 	return int(diff.Hours() / 24) // number of days
 }
 
 // loadDevotional scraps daily devotional text and packages the message as an email
 func loadDevotionalEmail() ([]byte, error) {
-	dev, err := http.Get(os.Getenv("WEB"))
+	dev, err := http.Get(os.Get("WEB"))
 	if err != nil {
 		return []byte("couldnt scrap web page"), errors.New("couldnt scrap webpage")
 	}
@@ -70,7 +66,7 @@ func loadDevotionalEmail() ([]byte, error) {
 
 	doc, err := goquery.NewDocumentFromReader(dev.Body)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("load devotional err", err)
 	}
 
 	var devotional []string
@@ -92,8 +88,8 @@ func loadDevotionalEmail() ([]byte, error) {
 // sendEmail sends devotional emails to me if there is an internet connection, daily
 func sendEmail(body []byte) {
 	godotenv.Load()
-	from := os.Getenv("MAIL")
-	password := os.Getenv("PWD")
+	from := os.Getenv("EMAIL")
+	password := os.Getenv("PASS")
 
 	to := []string{"brian_tum@outlook.com"}
 	host := "smtp.gmail.com"
@@ -101,15 +97,32 @@ func sendEmail(body []byte) {
 	auth := smtp.PlainAuth("", from, password, host)
 
 	if err := smtp.SendMail(host+":"+port, auth, from, to, body); err != nil {
-		log.Println(err)
+		log.Println("send email", err)
 		os.Exit(1)
 	}
 
 }
 
+// checkIfEmailIdSent confirms if an email is sent by checking if a folder is created.
+// if folder is present email is sent
+func checkIfEmailSent() bool {
+	home, _ := homedir.Dir()
+	location := fmt.Sprintf("%s/%s", home, ".devotional")
+
+	if _, err := os.Stat(location); errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	return true
+}
+
 func main() {
 	// if there is no internet, run the code again after 1 minute
 	ticker := time.NewTicker(1 * time.Minute)
+	home, _ := homedir.Dir()
+	location := fmt.Sprintf("%s/%s", home, ".devotional")
+
+	// check if email is sent - a temp folder would have been created called .devotional
+	isSent := checkIfEmailSent()
 
 	body, _ := loadDevotionalEmail()
 	response := make(chan Response)
@@ -117,12 +130,29 @@ func main() {
 	go checkNet(response)
 	net_ok := <-response
 
-	for range ticker.C {
-		if net_ok.Err == nil {
-			sendEmail(body)
-			ticker.Stop()
-			break
+	if !isSent {
+		for range ticker.C {
+			if net_ok.Err == nil {
+				sendEmail(body)
+				os.Mkdir(location, 0755)
+				ticker.Stop()
+				break
+			}
 		}
+	} else {
+		stat, _ := os.Stat(location)
+		timeCreated := stat.ModTime()
+		today := time.Now()
+		// format := "2006-01-02 15:04:05"
+
+		diff := today.Sub(timeCreated)
+
+		sinceCreated := int(diff.Hours() / 24)
+
+		if sinceCreated < 1 {
+			return
+		}
+		os.Remove(location)
 	}
 
 	os.Exit(0)

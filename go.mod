@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/PuerkitoBio/goquery v1.8.0
 	github.com/joho/godotenv v1.4.0
+	github.com/mitchellh/go-homedir v1.1.0
 )
 
 require (
